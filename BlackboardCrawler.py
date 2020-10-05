@@ -1,10 +1,10 @@
-#!coding: utf-8
 import json
 import time
 import requests
-import urllib2
+import urllib
 import re
 import os
+from functools import reduce
 import uuid # in case the error happens
 from getpass import getpass
 # import xml.etree.ElementTree as ET
@@ -106,7 +106,7 @@ class BlackboardCrawler:
       curframe = inspect.currentframe()
       calframe = inspect.getouterframes(curframe, 2)
       caller = calframe[1][3]
-      if(isinstance(s,unicode)):
+      if(isinstance(s, str)):
         print('{0}:{1}'.format(caller, s.encode(coding)))
       else:
         print('{0}:{1}'.format(caller, s))
@@ -224,31 +224,37 @@ class BlackboardCrawler:
       url = self.prefs.blackboard_url+url
     resp = self.sess.get(url, stream=True)
     headers = resp.headers
-    url = urllib2.urlparse.unquote(resp.url)
+    url = urllib.parse.unquote(resp.url)
     if(platform == "darwin"):
       url = url.encode('latin1')
-    if(isinstance(path,unicode)):
+    if(isinstance(path, str)):
       self.log(u'path: {0}'.format(path))
     else:
       self.log('path: {0}'.format(path))
     self.log('url: {0}'.format(url))
     self.log("header: {0}".format(resp.headers))
-    header_content = headers['Content-Disposition']
+    try:
+      header_content = headers['Content-Disposition']
+      coding, local_filename = re.findall("[*]=(.+)''(.+)", header_content)[0]
+    except:
+      local_filename = url.split('/')[-1]
     # self.log('local_filename1: {0}'.format(repr(header_content)))
-    coding, local_filename = re.findall("[*]=(.+)''(.+)", header_content)[0]
     # self.log('coding: {0}'.format(repr(coding)))
     # self.log('repr local_filename2: {0}'.format(repr(local_filename)))
-    local_filename_unquoted = urllib2.unquote(local_filename)
+    local_filename_unquoted = urllib.parse.unquote(local_filename)
     self.debug = local_filename_unquoted
     # self.log('local_filename3: {0}'.format(local_filename_unquoted))
     # self.log('str local_filename3: {0}'.format(str(local_filename_unquoted)))
     # self.log('repr local_filename3: {0}'.format(repr(local_filename_unquoted)))
     # self.log('type local_filename3: {0}'.format(type(local_filename_unquoted)))
-    final_local_filename = local_filename_unquoted.decode(coding)
+    final_local_filename = local_filename_unquoted
     # final_local_filename = local_filename_unquoted
     # self.log(u'local_filename4: {0}'.format(final_local_filename))
     # self.log(u'repr local_filename4: {0}'.format(repr(final_local_filename)))
-    file_size = resp.headers['Content-Length']
+    try:
+      file_size = resp.headers['Content-Length']
+    except:
+      file_size = 0
     # if(int(file_size)>=1024*1024*100):
     #   while(1):
     #     download = raw_input("The file {1} is around {0}MB, still download?(y/n)".format(int(file_size)/1024/1024, local_filename))
@@ -276,7 +282,7 @@ class BlackboardCrawler:
     self.log(repr(files))
     for f in files:
       file_url, file_name = f
-      if(isinstance(file_name,unicode)):
+      if(isinstance(file_name, str)):
         self.log(u'url: {0} {1}'.format(file_url, file_name))
       else:
         self.log('url: {0} {1}'.format(file_url, file_name))
@@ -297,7 +303,7 @@ class BlackboardCrawler:
   def _get_item_from_section(self, path_prefix, section):
     section_url, section_name = section
     section_name = section_name[:64]
-    if(isinstance(section_name,unicode)):
+    if(isinstance(section_name, str)):
       self.log(u'----reading sections: {0}'.format(section_name))
     else:
       self.log('----reading sections: {0}'.format(section_name))
@@ -306,7 +312,7 @@ class BlackboardCrawler:
     if(self.prefs.blackboard_url not in section_url):
       section_url = self.prefs.blackboard_url+section_url
     course_section_resp = self.sess.get(section_url)
-    directories = re.findall('<a href="(/webapps/blackboard/content/listContent.jsp?.+?)"><span style=".+?">(.+?)</span>', course_section_resp.text)
+    directories = re.findall('<a href="(/webapps/blackboard/content/listContent.jsp?.+?)".+?><span style=".+?">(.+?)</span>', course_section_resp.text)
     files = re.findall('<a(?:.+?|)href="(?:https://blackboard.cuhk.edu.hk|)(/bbcswebdav.+?)">(.+?)<', course_section_resp.text)
     """ files type 1
     <a href="/bbcswebdav/pid-2238145-dt-content-rid-8465171_1/xid-8465171_1" onClick="this.href='/webapps/blackboard/execute/content/file?cmd=view&content_id=_2238145_1&course_id=_87673_1'">
@@ -326,7 +332,7 @@ class BlackboardCrawler:
 
   def _get_course_sections(self, course_info):
     course_id, course_code, course_name = course_info
-    if(isinstance(course_name,unicode)):
+    if(isinstance(course_name, str)):
       self.log(u'reading course: {0}'.format(course_name))
     else:
       self.log('reading course: {0}'.format(course_name))
@@ -343,7 +349,7 @@ class BlackboardCrawler:
     blackboard_main_resp = sess.get(self.prefs.blackboard_url)
     next_url_1 = re.findall('url=(.+)', blackboard_main_resp.text)[0]
     # redirected to login page
-    next_url_1 = urllib2.urlparse.unquote(next_url_1)
+    next_url_1 = urllib.parse.unquote(next_url_1)
     login_page_resp = sess.get(next_url_1)
     self.login_page_url = login_page_resp.url
     self.sess = sess
